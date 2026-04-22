@@ -1,0 +1,43 @@
+# libpng source tree (downloaded during build)
+libpng-1.2.56/
+libpng-1.2.56.tar.gz
+
+# Build artifacts
+*.o
+*.a
+*.so
+install/
+install_vanilla/
+
+# AFL++ campaign output (queue/, crashes/, hangs/, ...)
+findings/
+findings-qemu/
+
+# NOTE: after the 30-minute campaigns, plot_data must be committed manually
+# Do with:
+#   git add -f findings/default/plot_data findings-qemu/default/plot_data
+#   git commit -m "Add plot_data from final campaigns"
+#
+# The -f flag overrides the ignore rule for that one add.
+
+# Compiled harness binaries
+png_fuzz
+png_fuzz_qemu
+png_fuzz_persistent
+
+# Editor/OS junk
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Report build artifacts (keep the .tex and .pdf, drop the rest)
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
