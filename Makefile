@@ -13,12 +13,25 @@ help:
 build:
 	docker build -t libpng-fuzz .
 
-# TODO
-fuzz:
-	@echo "Not implemented yet"
+IMAGE ?= libpng-fuzz
 
-fuzz-qemu:
-	@echo "Not implemented yet"
+fuzz: build
+	@mkdir -p findings
+	docker run --rm -it \
+		-v "$(CURDIR)/seeds:/work/seeds" \
+		-v "$(CURDIR)/dictionaries:/work/dictionaries" \
+		-v "$(CURDIR)/findings:/work/findings" \
+		$(IMAGE) \
+		afl-fuzz -i seeds -o findings -x dictionaries/text_input.dict -- ./bin/png_fuzz @@
+
+fuzz-qemu: build
+	@mkdir -p findings-qemu
+	docker run --rm -it \
+		-v "$(CURDIR)/seeds:/work/seeds" \
+		-v "$(CURDIR)/dictionaries:/work/dictionaries" \
+		-v "$(CURDIR)/findings-qemu:/work/findings-qemu" \
+		$(IMAGE) \
+		afl-fuzz -Q -i seeds -o findings-qemu -x dictionaries/text_input.dict -- ./bin/png_fuzz_qemu @@
 
 clean:
 	rm -rf findings findings-qemu plot_output plot_output_qemu

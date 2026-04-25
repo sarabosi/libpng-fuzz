@@ -10,17 +10,53 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /work
 
-# Download libpng 1.2.56
-RUN wget -q https://download.sourceforge.net/libpng/libpng-1.2.56.tar.gz \
-    && tar xf libpng-1.2.56.tar.gz \
-    && rm libpng-1.2.56.tar.gz
+# Download libpng 1.4.19
+RUN wget -q https://download.sourceforge.net/libpng/libpng-1.4.19.tar.gz \
+&& tar xf libpng-1.4.19.tar.gz \
+&& cp -r libpng-1.4.19 libpng-1.4.19-vanilla \
+&& rm libpng-1.4.19.tar.gz
+
+# Compile libraries
+WORKDIR /work/libpng-1.4.19
+RUN patch -p0 < /AFLplusplus/utils/libpng_no_checksum/libpng-nocrc.patch
+RUN CC=afl-clang-fast \
+CXX=afl-clang-fast++ \
+CFLAGS="-fsanitize=address -g -O1  -DPNG_iTXt_SUPPORTED" \
+LDFLAGS="-fsanitize=address" \
+./configure --disable-shared --prefix=$(pwd)/install && make -j$(nproc) && make install
+
+WORKDIR /work/libpng-1.4.19-vanilla
+RUN patch -p0 < /AFLplusplus/utils/libpng_no_checksum/libpng-nocrc.patch
+RUN CC=gcc CFLAGS="-g -O1 -DPNG_iTXt_SUPPORTED" \
+./configure --disable-shared --prefix=$(pwd)/install_vanilla && make -j$(nproc) && make install
+
+COPY src /work/src
+
+# Compile harnesses
+RUN mkdir /work/bin && afl-clang-fast /work/src/harness.c \
+-I/work/libpng-1.4.19/install/include \
+-L/work/libpng-1.4.19/install/lib \
+-lpng14 -lz -lm \
+-fsanitize=address -g -O1 \
+-DPNG_iTXt_SUPPORTED \
+-o /work/bin/png_fuzz
+
+RUN gcc /work/src/harness.c \
+-I/work/libpng-1.4.19-vanilla/install_vanilla/include \
+-L/work/libpng-1.4.19-vanilla/install_vanilla/lib \
+-lpng14 -lz -lm \
+-g -O1 \
+-DPNG_iTXt_SUPPORTED \
+-o /work/bin/png_fuzz_qemu
 
 # Last so source changes don't invalidate the libpng cache
-COPY . /work
+COPY seeds /work/seeds
+COPY dictionaries /work/dictionaries
+
+WORKDIR /work
+
+CMD /bin/bash
+
 
 # TODO:
-#  - apply CRC patch to the libpng source before compiling 
-#  - compile libpng with instrumentation (afl-clang-fast + ASan)
-#  - compile a second copy of libpng without instrumentation (for QEMU mode)
-#  - compile harness variants (regular, persistent, QEMU)
 #  - set default CMD to an interactive shell
