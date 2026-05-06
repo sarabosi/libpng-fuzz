@@ -1,68 +1,191 @@
-/* Fuzzing harness for libpng. 
- * 
- * AFL++ will pass each test input as a file path on the command line.
- * The program opens the file and feed it to libpng. Returns 0 if libpng doesn't crash.
- * To be filled in after the Dockerfile and build steps work.
- */
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <png.h>
-#include <setjmp.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-static void sink(png_structp p, png_bytep d, png_size_t n) { (void)p; (void)d; (void)n; }
-static void flush(png_structp p) { (void)p; }
 
-int main(int argc, char **argv) {
-    if (argc < 2) return 1;
-    FILE *f = fopen(argv[1], "rb");
-    if (!f) return 1;
+/* ================================================================== */
 
-    uint8_t buf[4096];
-    size_t n = fread(buf, 1, sizeof(buf), f);
-    fclose(f);
-    if (n < 8) return 0;                     // need a few bytes to map fields
+typedef struct {
+    const uint8_t *data;
+    size_t         size;
+    size_t         pos;
+} mem_source_t;
 
-    /* Layout: byte0 = compression, byte1 = key_len (0..79),
-        rest split into key + text per key_len. */
-    int     compression = (int8_t)buf[0];    // includes negative / out-of-range values
-    size_t  key_len     = buf[1] % 80;
-    if (key_len + 2 > n) key_len = n - 2;
+static void mem_read_fn(png_structp png_ptr, png_bytep buf, png_size_t count)
+{
+    mem_source_t *src = (mem_source_t *)png_get_io_ptr(png_ptr);
 
-    char key[80] = {0};
-    memcpy(key, buf + 2, key_len);
-    key[key_len] = '\0';                     // png_text.key must be NUL-terminated
+    if (src->pos + count > src->size) {
+        /* Signal EOF / read error to libpng */
+        png_error(png_ptr, "not enough data");
+    }
+    memcpy(buf, src->data + src->pos, count);
+    src->pos += count;
+}
 
-    png_text txt;
-    memset(&txt, 0, sizeof(txt));
-    txt.compression = compression;
-    txt.key         = key;
-    txt.text        = (char *)(buf + 2 + key_len);
-    txt.text_length = n - 2 - key_len;
+/* ================================================================== */
 
-    png_structp png  = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png) return 0;
-    png_infop   info = png_create_info_struct(png);
-    if (!info) { png_destroy_write_struct(&png, NULL); return 0; }
+static void error_fn(png_structp png_ptr, png_const_charp msg)
+{
+    (void)msg;
+    longjmp(png_jmpbuf(png_ptr), 1);
+}
 
-    if (setjmp(png_jmpbuf(png))) {
-        png_destroy_write_struct(&png, &info);
+static void warning_fn(png_structp png_ptr, png_const_charp msg)
+{
+    (void)png_ptr;
+    (void)msg;
+}
+
+/* ================================================================== */
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+{
+    /* Minimum PNG : signature (8 bytes) && >= 1 chunk (IHDR = 25 bytes) */
+    /* return 0 : -> no time to spend on obvious invalid png */
+    if (size < 33)
+        return 0;
+
+    png_structp png_ptr      = NULL;
+    png_infop   info_ptr     = NULL;
+    png_bytep  *row_pointers = NULL;
+
+    png_ptr = png_create_read_struct( PNG_LIBPNG_VER_STRING, NULL, error_fn, warning_fn);
+    if (!png_ptr) return 0;
+
+    info_ptr = png_create_info_struct(png_ptr);
+    if (!info_ptr) {
+        png_destroy_read_struct(&png_ptr, NULL, NULL);
         return 0;
     }
-    png_set_text(png, info, &txt, 1); 
 
-    
-    png_set_write_fn(png, NULL, sink, flush);
-    png_set_IHDR(png, info, 1, 1, 8, PNG_COLOR_TYPE_GRAY,
-                PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
-                PNG_FILTER_TYPE_DEFAULT);
-    png_set_text(png, info, &txt, 1);
-    png_write_info(png, info);
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        if (row_pointers) {
+            png_uint_32 h = png_get_image_height(png_ptr, info_ptr);
+            for (png_uint_32 i = 0; i < h; i++)
+                free(row_pointers[i]);
+            free(row_pointers);
+        }
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        return 0;
+    }
 
-    png_destroy_write_struct(&png, &info);
+    mem_source_t src = { data, size, 0 };
+    png_set_read_fn(png_ptr, &src, mem_read_fn);
+
+    /* ------ Read PNG header / metadata -------------------------------- */
+    png_read_info(png_ptr, info_ptr);
+
+    png_uint_32 width      = png_get_image_width(png_ptr, info_ptr);
+    png_uint_32 height     = png_get_image_height(png_ptr, info_ptr);
+    int         bit_depth  = png_get_bit_depth(png_ptr, info_ptr);
+    int         color_type = png_get_color_type(png_ptr, info_ptr);
+
+    /*
+     * Very big images : slows down the fuzzer : 
+     * 4096×4096 at 4 bytes/pixel = 64 MB upper bound.
+     */
+    if (width == 0 || height == 0 || width > 4096 || height > 4096) {
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        return 0;
+    }
+
+    /* --- Expand + normalise transforms (increase code paths) -- */
+
+    /* Palette images to RGB */
+    if (color_type == PNG_COLOR_TYPE_PALETTE)
+        png_set_palette_to_rgb(png_ptr);
+
+    /* low-bit-depth grayscale to 8-bit */
+    if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
+        png_set_expand_gray_1_2_4_to_8(png_ptr);
+
+    /* tRNS chunks to a full alpha channel */
+    if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS))
+        png_set_tRNS_to_alpha(png_ptr);
+
+    /* 16-bit channels down to 8-bit */
+    if (bit_depth == 16)
+        png_set_strip_16(png_ptr);
+
+    /* Add alpha channel if missing (with 0xFF) */
+    if (!(color_type & PNG_COLOR_MASK_ALPHA))
+        png_set_filler(png_ptr, 0xFF, PNG_FILLER_AFTER);
+
+    png_read_update_info(png_ptr, info_ptr);
+
+    /* --- Allocate row buffers and read the image data -------------- */
+    png_size_t rowbytes = png_get_rowbytes(png_ptr, info_ptr);
+
+    row_pointers = (png_bytep *)malloc(height * sizeof(png_bytep));
+    if (!row_pointers) {
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        return 0;
+    }
+
+    for (png_uint_32 i = 0; i < height; i++) {
+        row_pointers[i] = NULL;
+    }
+    for (png_uint_32 i = 0; i < height; i++) {
+        row_pointers[i] = (png_bytep)malloc(rowbytes);
+        if (!row_pointers[i]) {
+            for (png_uint_32 j = 0; j < i; j++)
+                free(row_pointers[j]);
+            free(row_pointers);
+            row_pointers = NULL;
+            png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+            return 0;
+        }
+    }
+
+    /* --- READ the IMAGE ! --- */
+    png_read_image(png_ptr, row_pointers);
+
+    /* --- Read trailing chunks (tEXt, zTXt, eXIf, …) --------------- */
+    png_read_end(png_ptr, info_ptr);
+
+    /* --- Frees teh pointers -------------------------------------------------- */
+    for (png_uint_32 i = 0; i < height; i++)
+        free(row_pointers[i]);
+    free(row_pointers);
+    row_pointers = NULL;
+
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
     return 0;
 }
 
-// afl-fuzz -i /AFLplusplus/testcases/images/png/ -o findings -x /AFLplusplus/dictionaries/png.dict -- ./bin/png_fuzz @@
-// afl-fuzz -i seeds -o findings -x dictionaries/text_input.dict -- ./bin/png_fuzz @@
-// ./bin/png_fuzz /AFLplusplus/testcases/images/png/not_kitty.png
+/* ------------------------------------------------------------------ */
+/* AFL stub (only compiled when FUZZING_AFL is defined)               */
+/* ------------------------------------------------------------------ */
+#ifdef FUZZING_AFL
+#include <stdio.h>
+#include <setjmp.h>
+
+int main(int argc, char **argv)
+{
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
+        return 1;
+    }
+    FILE *f = fopen(argv[1], "rb");
+    if (!f) { perror("fopen"); return 1; }
+
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    rewind(f);
+
+    if (fsize <= 0) { fclose(f); return 1; }
+
+    uint8_t *buf = (uint8_t *)malloc((size_t)fsize);
+    if (!buf) { fclose(f); return 1; }
+
+    fread(buf, 1, (size_t)fsize, f);
+    fclose(f);
+
+    LLVMFuzzerTestOneInput(buf, (size_t)fsize);
+    free(buf);
+    return 0;
+}
+#endif /* FUZZING_AFL */

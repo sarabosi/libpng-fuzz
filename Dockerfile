@@ -1,62 +1,30 @@
-# Starts from official AFL++ Docker image as base
 FROM aflplusplus/aflplusplus:latest
 
-# System deps for building libpng
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        wget \
-        build-essential \
-        zlib1g-dev \
+# ----------------- libpng 1.2.56 -----------------
+RUN apt-get update && apt-get install -y \
+    wget \
+    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /work
+# ----------------- libpng (forQEMU) -----------------
+RUN wget https://download.sourceforge.net/libpng/libpng-1.2.56.tar.gz \
+    && tar -xf libpng-1.2.56.tar.gz \
+    && cd libpng-1.2.56 \
+    && ./configure --prefix=/usr/local \
+    && make -j$(nproc) && make install && ldconfig \
+    && cd / && rm -rf libpng-1.2.56
 
-# Download libpng 1.4.19
-RUN wget -q https://download.sourceforge.net/libpng/libpng-1.4.19.tar.gz \
-&& tar xf libpng-1.4.19.tar.gz \
-&& cp -r libpng-1.4.19 libpng-1.4.19-vanilla \
-&& rm libpng-1.4.19.tar.gz
-
-# Compile libraries
-WORKDIR /work/libpng-1.4.19
-RUN patch -p0 < /AFLplusplus/utils/libpng_no_checksum/libpng-nocrc.patch
-RUN CC=afl-clang-fast \
-CXX=afl-clang-fast++ \
-CFLAGS="-fsanitize=address -g -O1  -DPNG_iTXt_SUPPORTED" \
-LDFLAGS="-fsanitize=address" \
-./configure --disable-shared --prefix=$(pwd)/install && make -j$(nproc) && make install
-
-WORKDIR /work/libpng-1.4.19-vanilla
-RUN patch -p0 < /AFLplusplus/utils/libpng_no_checksum/libpng-nocrc.patch
-RUN CC=gcc CFLAGS="-g -O1 -DPNG_iTXt_SUPPORTED" \
-./configure --disable-shared --prefix=$(pwd)/install_vanilla && make -j$(nproc) && make install
-
-COPY src /work/src
-
-# Compile harnesses
-RUN mkdir /work/bin && afl-clang-fast /work/src/harness.c \
--I/work/libpng-1.4.19/install/include \
--L/work/libpng-1.4.19/install/lib \
--lpng14 -lz -lm \
--fsanitize=address -g -O1 \
--DPNG_iTXt_SUPPORTED \
--o /work/bin/png_fuzz
-
-RUN gcc /work/src/harness.c \
--I/work/libpng-1.4.19-vanilla/install_vanilla/include \
--L/work/libpng-1.4.19-vanilla/install_vanilla/lib \
--lpng14 -lz -lm \
--g -O1 \
--DPNG_iTXt_SUPPORTED \
--o /work/bin/png_fuzz_qemu
-
-# Last so source changes don't invalidate the libpng cache
-COPY seeds /work/seeds
-COPY dictionaries /work/dictionaries
+# ----------------- Sanitized libpng -----------------
+RUN tar -xf libpng-1.2.56.tar.gz \
+    && cd libpng-1.2.56 \
+    && ./configure --prefix=/usr/local/asan \
+       CC=afl-clang-fast \
+       CFLAGS="-fsanitize=address,undefined -g" \
+       LDFLAGS="-fsanitize=address,undefined" \
+    && make -j$(nproc) && make install \
+    && cd / && rm -rf libpng-1.2.56 libpng-1.2.56.tar.gz
 
 WORKDIR /work
 
-CMD /bin/bash
+CMD ["/bin/bash"]
 
-
-# TODO:
-#  - set default CMD to an interactive shell

@@ -1,0 +1,122 @@
+# =============================================================================
+# PNG fuzzing dictionary for libpng 1.2.56
+# =============================================================================
+
+# ----------------------------- PNG file signature ----------------------------
+signature="\x89PNG\r\n\x1a\n"
+
+# ---------------------- Critical chunk type identifiers ----------------------
+
+chunk_IHDR="IHDR"
+chunk_IDAT="IDAT"
+chunk_IEND="IEND"
+chunk_PLTE="PLTE"
+
+# ---------------------- Ancillary chunk type identifiers ---------------------
+
+chunk_zTXt="zTXt"
+chunk_iTXt="iTXt"
+chunk_tEXt="tEXt"
+chunk_iCCP="iCCP"
+chunk_tRNS="tRNS"
+chunk_bKGD="bKGD"
+chunk_gAMA="gAMA"
+chunk_sBIT="sBIT"
+chunk_sRGB="sRGB"
+chunk_sPLT="sPLT"
+chunk_hIST="hIST"
+chunk_pHYs="pHYs"
+chunk_oFFs="oFFs"
+chunk_tIME="tIME"
+chunk_fRAc="fRAc"
+chunk_gIFt="gIFt"
+chunk_gIFg="gIFg"
+chunk_gIFx="gIFx"
+
+# ----------------------- IHDR: color type field values -----------------------
+
+color_type_gray="\x00"
+color_type_rgb="\x02"
+color_type_palette="\x03"
+color_type_gray_alpha="\x04"
+color_type_rgba="\x06"
+
+# --------------------------  IHDR: bit depth values --------------------------
+bit_depth_1="\x01"
+bit_depth_2="\x02"
+bit_depth_4="\x04"
+bit_depth_8="\x08"
+bit_depth_16="\x10"
+
+# --------------------------- IHDR: interlace method -------------------------- 
+
+# No interlace
+interlace_none="\x00"
+
+# Adam7 interlace — 7-pass progressive rendering, complex row calculations
+interlace_adam7="\x01"
+
+
+# -------------------- IHDR: compression and filter method --------------------
+compression_method_valid="\x00" # always 0 in libpng 1.2
+compression_method_invalid="\x01"
+filter_method_valid="\x00"
+filter_method_invalid="\x01"
+
+# --------------------------- Row filter type bytes ---------------------------
+filter_none="\x00"
+filter_sub="\x01"
+filter_up="\x02"
+filter_average="\x03"
+filter_paeth="\x04"
+filter_invalid="\x05"
+
+# ---------------------------- zlib stream headers ----------------------------
+zlib_header_default="\x78\x9c"
+zlib_header_best="\x78\xda"
+zlib_header_fast="\x78\x01"
+zlib_header_nocomp="\x78\x5e"
+zlib_header_corrupt="\x78\x00"
+
+crc_zero="\x00\x00\x00\x00"
+crc_ones="\xff\xff\xff\xff"
+
+# ----------------------------- Chunk length field ----------------------------
+
+length_zero="\x00\x00\x00\x00"
+length_one="\x00\x00\x00\x01"
+length_max="\x7f\xff\xff\xff"
+length_overflow="\x80\x00\x00\x00"
+length_allones="\xff\xff\xff\xff"
+
+# ----------------------------------  pixels ----------------------------------
+dim_1="\x00\x00\x00\x01"
+dim_2="\x00\x00\x00\x02"
+dim_7="\x00\x00\x00\x07"
+dim_8="\x00\x00\x00\x08"
+dim_256="\x00\x00\x01\x00"
+dim_int16_max="\x00\x00\x7f\xff"
+dim_int16_max_plus1="\x00\x00\x80\x00"
+dim_uint16_max="\x00\x00\xff\xff"
+dim_uint16_overflow="\x00\x01\x00\x00"
+dim_max_spec="\x7f\xff\xff\xff"
+dim_out_of_spec="\x80\x00\x00\x00"
+
+# ------------------------ iCCP / zTXt keyword strings ------------------------
+iccp_keyword_srgb="sRGB"
+iccp_keyword_adobergb="Adobe RGB (1998)"
+iccp_keyword_generic="ICC Profile"
+keyword_toolong="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+# -------------------- tEXt / zTXt standard keyword strings -------------------
+text_kw_title="Title"
+text_kw_author="Author"
+text_kw_description="Description"
+text_kw_copyright="Copyright"
+text_kw_software="Software"
+text_kw_comment="Comment"
+text_kw_source="Source"
+text_kw_warning="Warning"
+
+null_separator="\x00"
+iend_chunk="\x00\x00\x00\x00IEND\xaeB`\x82"
