@@ -38,7 +38,7 @@ WORKDIR /work
 COPY src /work/src
 
 # white-box: instrumented + ASan
-RUN AFL_LLVM_LAF_ALL=1 afl-clang-fast \
+RUN AFL_LLVM_LAF_ALL=1 afl-clang-fast -DFUZZING_AFL \
     -I/usr/local/asan/include -fsanitize=address,undefined -g \
     -o /work/harness-white /work/src/harness.c \
     -L/usr/local/asan/lib -lpng12 -lz -lm \
@@ -59,10 +59,10 @@ RUN AFL_LLVM_LAF_ALL=1 afl-clang-fast \
 
 # no-sanitizer persistent: instrumented only, no ASan (for Q8 speed comparison)
 RUN AFL_LLVM_LAF_ALL=1 afl-clang-fast \
-    -I/usr/local/asan/include -g \
+    -I/usr/local/include -g \
     -o /work/harness-persistent-noasan /work/src/harness_persistent.c \
-    -L/usr/local/asan/lib -lpng12 -lz -lm \
-    -Wl,-rpath,/usr/local/asan/lib
+    -L/usr/local/lib -lpng12 -lz -lm \
+    -Wl,-rpath,/usr/local/lib
 
 COPY seeds /work/seeds
 COPY dictionaries /work/dictionaries
