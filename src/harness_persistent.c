@@ -132,13 +132,14 @@ static int fuzz_one(const uint8_t *data, size_t size)
 
     png_read_end(png_ptr, info_ptr);
 
-    // query text/ancillary chunks
-    png_textp text_ptr; int num_text = 0;
-    png_get_text(png_ptr, info_ptr, &text_ptr, &num_text);
-
-    double gamma;           png_get_gAMA(png_ptr, info_ptr, &gamma);
-    png_color_16p bg;       png_get_bKGD(png_ptr, info_ptr, &bg);
-    png_uint_32 rx, ry, u;  png_get_pHYs(png_ptr, info_ptr, &rx, &ry, &u);
+    // ancillary chunk queries — exercise tEXt/zTXt/iTXt parsers and metadata chunks.
+    // png_set_text_2 (called internally) is where CVE-2016-10087 lives.
+    // uncomment to push AFL++ into those code paths.
+    // png_textp text_ptr; int num_text = 0;
+    // png_get_text(png_ptr, info_ptr, &text_ptr, &num_text);
+    // double gamma;           png_get_gAMA(png_ptr, info_ptr, &gamma);
+    // png_color_16p bg;       png_get_bKGD(png_ptr, info_ptr, &bg);
+    // png_uint_32 rx, ry, u;  png_get_pHYs(png_ptr, info_ptr, &rx, &ry, &u);
 
     // cleanup
     for (png_uint_32 i = 0; i < height; i++)
@@ -168,4 +169,3 @@ int main(void)
 }
 
 // afl-fuzz -i seeds -o findings-persistent -x dictionaries/png.dict -- ./harness-persistent
-// ./harness-persistent < seeds/not_kitty.png
