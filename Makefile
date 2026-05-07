@@ -40,7 +40,7 @@ white-box: $(SRC)
 
 black-box: $(SRC)
 	$(CC_BLACK) \
-		-I$(LIBPNG_INC) -fsanitize=address,undefined -g \
+		-I$(LIBPNG_INC) -g \
 		-o $(TARGET)-black $< \
 		-L$(LIBPNG_LIB) $(LIBS)
 	@echo "[+] Black-box binary ready: $(TARGET)-black"
