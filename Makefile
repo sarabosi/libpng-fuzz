@@ -33,7 +33,7 @@ all: white-box black-box persistent
 
 white-box: $(SRC)
 	AFL_LLVM_LAF_ALL=1 $(CC_WHITE) -fsanitize=fuzzer \
-		-I$(LIBPNG_INC_ASAN) -fsanitize=address,undefined -g \
+		-I$(LIBPNG_INC_ASAN) -fsanitize=address -g \
 		-o $(TARGET)-white $< \
 		-L$(LIBPNG_LIB_ASAN) $(LIBS) -Wl,-rpath,$(LIBPNG_LIB_ASAN)
 	@echo "[+] White-box binary ready: $(TARGET)-white"
@@ -48,7 +48,7 @@ black-box: $(SRC)
 ## persistent — compile the persistent-mode binary (AFL++ stdin loop)
 persistent: $(SRC_PERSIST)
 	AFL_LLVM_LAF_ALL=1 $(CC_WHITE) \
-		-I$(LIBPNG_INC_ASAN) -fsanitize=address,undefined -g \
+		-I$(LIBPNG_INC_ASAN) -fsanitize=address -g \
 		-o $(TARGET)-persistent $< \
 		-L$(LIBPNG_LIB_ASAN) $(LIBS) -Wl,-rpath,$(LIBPNG_LIB_ASAN)
 	@echo "[+] Persistent-mode binary ready: $(TARGET)-persistent"

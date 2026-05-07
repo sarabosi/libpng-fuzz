@@ -28,8 +28,8 @@ RUN cp -r libpng-1.2.56 libpng-1.2.56-asan \
     && cd libpng-1.2.56-asan \
     && ./configure --prefix=/usr/local/asan --disable-shared \
        CC=afl-clang-fast \
-       CFLAGS="-fsanitize=address,undefined -g" \
-       LDFLAGS="-fsanitize=address,undefined" \
+       CFLAGS="-fsanitize=address -g" \
+       LDFLAGS="-fsanitize=address" \
     && make -j$(nproc) && make install \
     && cd / && rm -rf libpng-1.2.56-asan libpng-1.2.56 libpng-1.2.56.tar.gz
 
