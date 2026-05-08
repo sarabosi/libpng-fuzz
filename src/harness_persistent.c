@@ -151,44 +151,18 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 /* AFL++ persistent mode entry point                                   */
 /* ================================================================== */
 
-int main(int argc, char **argv)
+__AFL_FUZZ_INIT();  /* ← declare the shared memory buffer */
+
+int main(void)
 {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
-        return 1;
-    }
+    __AFL_INIT();   /* ← connect to AFL++ shared memory */
+
+    uint8_t *buf = __AFL_FUZZ_TESTCASE_BUF;  /* pointer to mutated input */
 
     while (__AFL_LOOP(10000)) {
+        size_t len = __AFL_FUZZ_TESTCASE_LEN; /* length of current input */
 
-        /* Re-read the input file every iteration — AFL++ mutates it
-         * between loops when using @@ */
-        FILE *f = fopen(argv[1], "rb");
-        if (!f) continue;
-
-        fseek(f, 0, SEEK_END);
-        long fsize = ftell(f);
-        rewind(f);
-
-        if (fsize <= 0) {
-            fclose(f);
-            continue;
-        }
-
-        uint8_t *buf = (uint8_t *)malloc((size_t)fsize);
-        if (!buf) {
-            fclose(f);
-            continue;
-        }
-
-        if (fread(buf, 1, (size_t)fsize, f) != (size_t)fsize) {
-            free(buf);
-            fclose(f);
-            continue;
-        }
-        fclose(f);
-
-        LLVMFuzzerTestOneInput(buf, (size_t)fsize);
-        free(buf);
+        LLVMFuzzerTestOneInput(buf, len);      /* no malloc, no fopen, no fread */
     }
 
     return 0;
