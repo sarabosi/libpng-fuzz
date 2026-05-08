@@ -32,7 +32,7 @@ LDFLAGS     := -L$(LIBPNG_LIB) $(LIBS)
 all: white-box black-box persistent
 
 white-box: $(SRC)
-	AFL_LLVM_LAF_ALL=1 $(CC_WHITE) -fsanitize=fuzzer \
+	AFL_LLVM_LAF_ALL=1 $(CC_WHITE) -DFUZZING_AFL \
 		-I$(LIBPNG_INC_ASAN) -fsanitize=address -g \
 		-o $(TARGET)-white $< \
 		-L$(LIBPNG_LIB_ASAN) $(LIBS) -Wl,-rpath,$(LIBPNG_LIB_ASAN)
@@ -68,8 +68,7 @@ fuzz-qemu: black-box
 ## fuzz-persistent  — run AFL++ with persistent mode (stdin, no @@ needed)
 fuzz-persistent: persistent
 	@mkdir -p $(CORPUS_DIR) $(OUTPUT_DIR)-persistent
-	$(AFL_FUZZ) $(AFL_FLAGS) -o $(OUTPUT_DIR)-persistent -- ./$(TARGET)-persistent
-
+	$(AFL_FUZZ) $(AFL_FLAGS) -o $(OUTPUT_DIR)-persistent -- ./$(TARGET)-persistent @@
 # ── Housekeeping ──────────────────────────────────────────────────────────────
 
 ## clean  — remove compiled binaries and fuzzer output
