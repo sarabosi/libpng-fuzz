@@ -41,21 +41,18 @@ build:
 		$(COMMON_FLAGS) \
 		-o bin/png_fuzz_qemu
 
-fuzz:
-	build
+fuzz: build
 	afl-fuzz -i seeds -o findings \
 		-x dictionaries/png.dict \
 		-- bin/png_fuzz @@
 
-fuzz-qemu:
-	build
+fuzz-qemu: build
 	# Note: -Q is for QEMU mode
 	afl-fuzz -Q -i seeds -o findings-qemu \
 		-x dictionaries/png.dict \
 		-- bin/png_fuzz_qemu @@
 
-fuzz-persistent:
-	build
+fuzz-persistent: build
 	afl-fuzz -i seeds -o findings-persistent \
 		-x dictionaries/png.dict \
 		-- bin/png_fuzz_persistent
