@@ -6,10 +6,10 @@ all: help
 help:
 	@echo "libpng fuzzing lab — available targets:"
 	@echo "  build            Build the Docker image"
-	@echo "  fuzz             Run the instrumented AFL++ campaign"
-	@echo "  fuzz-qemu        Run the QEMU-mode AFL++ campaign"
-	@echo "  fuzz-persistent  Run the persistent-mode AFL++ campaign"
-	@echo "  clean            Remove build artifacts"
+	@echo "  fuzz             Run AFL++ with non-persistent harness (file argument mode)"
+	@echo "  fuzz-qemu        Run AFL++ in QEMU black-box mode"
+	@echo "  fuzz-persistent  Run AFL++ with persistent-mode harness (fastest)"
+	@echo "  clean            Remove findings directories"
 
 build:
 	docker build -t libpng-fuzz .
@@ -17,32 +17,28 @@ build:
 IMAGE ?= libpng-fuzz
 
 fuzz: build
-	@mkdir -p findings
 	docker run --rm -it \
-		-v "$(CURDIR)/seeds:/work/seeds" \
-		-v "$(CURDIR)/dictionaries:/work/dictionaries" \
 		-v "$(CURDIR)/findings:/work/findings" \
 		$(IMAGE) \
-		afl-fuzz -i seeds -o findings -x dictionaries/text_input.dict -- ./bin/png_fuzz @@
+		afl-fuzz -i /work/pngsuite-full -o /work/findings \
+		-x /AFLplusplus/dictionaries/png.dict \
+		-- /work/bin/png_fuzz @@
 
 fuzz-qemu: build
-	@mkdir -p findings-qemu
 	docker run --rm -it \
-		-v "$(CURDIR)/seeds:/work/seeds" \
-		-v "$(CURDIR)/dictionaries:/work/dictionaries" \
 		-v "$(CURDIR)/findings-qemu:/work/findings-qemu" \
 		$(IMAGE) \
-		afl-fuzz -Q -i seeds -o findings-qemu -x dictionaries/text_input.dict -- ./bin/png_fuzz_qemu @@
+		afl-fuzz -Q -i /work/pngsuite-full -o /work/findings-qemu \
+		-x /AFLplusplus/dictionaries/png.dict \
+		-- /work/bin/png_fuzz_qemu @@
 
 fuzz-persistent: build
-	@mkdir -p findings-persistent
 	docker run --rm -it \
-		-v "$(CURDIR)/seeds:/work/seeds" \
-		-v "$(CURDIR)/dictionaries:/work/dictionaries" \
 		-v "$(CURDIR)/findings-persistent:/work/findings-persistent" \
 		$(IMAGE) \
-		afl-fuzz -i seeds -o findings-persistent -x dictionaries/text_input.dict -- ./bin/png_fuzz_persistent @@
+		afl-fuzz -i /work/pngsuite-full -o /work/findings-persistent \
+		-x /AFLplusplus/dictionaries/png.dict \
+		-- /work/bin/png_fuzz_persistent @@
 
 clean:
-	rm -rf findings findings-qemu findings-persistent plot_output plot_output_qemu plot_output_persistent
-	rm -f png_fuzz png_fuzz_qemu png_fuzz_persistent
+	rm -rf findings findings-qemu findings-persistent
