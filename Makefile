@@ -1,44 +1,61 @@
 .PHONY: all build fuzz fuzz-qemu fuzz-persistent clean help
 
+ASAN_PATH = /usr/local/asan
+VANILLA_PATH = /usr/local/vanilla
+
+# Flags common to both harnesses
+COMMON_FLAGS = -DPNG_iTXt_SUPPORTED -g -O2
+
 # Default target
 all: help
 
 help:
 	@echo "libpng fuzzing lab — available targets:"
-	@echo "  build            Build the Docker image"
+	@echo "  build            Build all three binaries for AFL++ campaign"
 	@echo "  fuzz             Run AFL++ with non-persistent harness (file argument mode)"
 	@echo "  fuzz-qemu        Run AFL++ in QEMU black-box mode"
 	@echo "  fuzz-persistent  Run AFL++ with persistent-mode harness (fastest)"
-	@echo "  clean            Remove findings directories"
+	@echo "  clean            Remove build and findings"
 
 build:
-	docker build -t libpng-fuzz .
+	mkdir -p bin
 
-IMAGE ?= libpng-fuzz
+	# Non-persistent harness (using ASan instrumented lib)
+	afl-clang-fast src/harness.c \
+		-I$(ASAN_PATH)/include \
+		$(ASAN_PATH)/lib/libpng14.a -lz -lm \
+		-fsanitize=address $(COMMON_FLAGS) \
+		-o bin/png_fuzz
+
+	# Persistent harness (using ASan instrumented lib)
+	afl-clang-fast src/harness_persistent.c \
+		-I$(ASAN_PATH)/include \
+		$(ASAN_PATH)/lib/libpng14.a -lz -lm \
+		-fsanitize=address $(COMMON_FLAGS) \
+		-o bin/png_fuzz_persistent
+
+	# QEMU harness (using Vanilla/Uninstrumented lib)
+	gcc src/harness_persistent.c \
+		-I$(VANILLA_PATH)/include \
+		$(VANILLA_PATH)/lib/libpng14.a -lz -lm \
+		$(COMMON_FLAGS) \
+		-o bin/png_fuzz_qemu
 
 fuzz: build
-	docker run --rm -it \
-		-v "$(CURDIR)/findings:/work/findings" \
-		$(IMAGE) \
-		afl-fuzz -i /work/pngsuite-full -o /work/findings \
-		-x /AFLplusplus/dictionaries/png.dict \
-		-- /work/bin/png_fuzz @@
+	afl-fuzz -i seeds -o findings \
+		-x dictionaries/png.dict \
+		-- bin/png_fuzz @@
 
 fuzz-qemu: build
-	docker run --rm -it \
-		-v "$(CURDIR)/findings-qemu:/work/findings-qemu" \
-		$(IMAGE) \
-		afl-fuzz -Q -i /work/pngsuite-full -o /work/findings-qemu \
-		-x /AFLplusplus/dictionaries/png.dict \
-		-- /work/bin/png_fuzz_qemu @@
+	# Note: -Q is for QEMU mode
+	afl-fuzz -Q -i seeds -o findings-qemu \
+		-x dictionaries/png.dict \
+		-- bin/png_fuzz_qemu @@
 
 fuzz-persistent: build
-	docker run --rm -it \
-		-v "$(CURDIR)/findings-persistent:/work/findings-persistent" \
-		$(IMAGE) \
-		afl-fuzz -i /work/pngsuite-full -o /work/findings-persistent \
-		-x /AFLplusplus/dictionaries/png.dict \
-		-- /work/bin/png_fuzz_persistent @@
+	afl-fuzz -i seeds -o findings-persistent \
+		-x dictionaries/png.dict \
+		-- bin/png_fuzz_persistent
 
 clean:
-	rm -rf findings findings-qemu findings-persistent
+	rm -rf bin findings findings-qemu findings-persistent

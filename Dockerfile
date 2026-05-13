@@ -1,78 +1,41 @@
-# Starts from official AFL++ Docker image as base
 FROM aflplusplus/aflplusplus:latest
 
-# System deps for building libpng
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        wget \
-        build-essential \
-        zlib1g-dev \
+# ----------------- libpng 1.4.8 -----------------
+RUN apt-get update && apt-get install -y \
+    wget \
+    zlib1g-dev \
+    patch \
     && rm -rf /var/lib/apt/lists/*
 
-COPY patches /work/patches
+# Copy patches into the image
+COPY patches/ /tmp/patches/
 
-WORKDIR /work
+RUN wget https://download.sourceforge.net/libpng/libpng-1.4.8.tar.gz \
+    && tar -xf libpng-1.4.8.tar.gz \
+    && cd libpng-1.4.8 \
+    && patch -p0 < /tmp/patches/libpng-nocrc.patch
 
-# Download libpng 1.4.8
-RUN wget -q https://download.sourceforge.net/libpng/libpng-1.4.8.tar.gz \
-&& tar xf libpng-1.4.8.tar.gz \
-&& cp -r libpng-1.4.8 libpng-1.4.8-vanilla \
-&& rm libpng-1.4.8.tar.gz
+#Vanilla (uninstrumented) libpng for QEMU mode
+RUN cp -r libpng-1.4.8 libpng-1.4.8-vanilla \
+    && cd libpng-1.4.8-vanilla \
+    && ./configure --prefix=/usr/local/vanilla --disable-shared \
+    && make -j$(nproc) && make install && ldconfig \
+    && cd / && rm -rf libpng-1.4.8-vanilla
 
-# PngSuite corpus
-COPY PngSuite-2017jul19.tgz /tmp/pngsuite.tgz
-RUN mkdir -p /work/pngsuite-full \
- && tar xf /tmp/pngsuite.tgz -C /work/pngsuite-full \
- && rm /tmp/pngsuite.tgz
-
-# Compile libraries
-WORKDIR /work/libpng-1.4.8
-RUN patch -p0 < /work/patches/libpng-nocrc.patch
-RUN CC=afl-clang-fast \
-CXX=afl-clang-fast++ \
-CFLAGS="-fsanitize=address -fno-sanitize-address-use-after-scope -g -O1 -DPNG_iTXt_SUPPORTED" \
-LDFLAGS="-fsanitize=address" \
-./configure --disable-shared --prefix=$(pwd)/install && make -j$(nproc) && make install
-
-WORKDIR /work/libpng-1.4.8-vanilla
-RUN patch -p0 < /work/patches/libpng-nocrc.patch
-RUN CC=gcc CFLAGS="-g -O1 -DPNG_iTXt_SUPPORTED" \
-./configure --disable-shared --prefix=$(pwd)/install_vanilla && make -j$(nproc) && make install
-
-COPY src /work/src
-
-# Compile harnesses
-RUN mkdir -p /work/bin
-
-# Non-persistent harness (for make fuzz with @@ file argument)
-RUN afl-clang-fast /work/src/harness.c \
--I/work/libpng-1.4.8/install/include \
--L/work/libpng-1.4.8/install/lib \
--lpng14 -lz -lm \
--fsanitize=address -g -O1 \
--DPNG_iTXt_SUPPORTED \
--o /work/bin/png_fuzz
-
-# Persistent harness (AFL++ persistent mode, fastest)
-RUN afl-clang-fast /work/src/harness_persistent.c \
--I/work/libpng-1.4.8/install/include \
--L/work/libpng-1.4.8/install/lib \
--lpng14 -lz -lm \
--fsanitize=address -g -O1 \
--DPNG_iTXt_SUPPORTED \
--o /work/bin/png_fuzz_persistent
-
-# QEMU harness: uninstrumented gcc build for black-box mode
-RUN gcc /work/src/harness_persistent.c \
--I/work/libpng-1.4.8-vanilla/install_vanilla/include \
--L/work/libpng-1.4.8-vanilla/install_vanilla/lib \
--lpng14 -lz -lm \
--g -O1 \
--DPNG_iTXt_SUPPORTED \
--o /work/bin/png_fuzz_qemu
-
-# Last so source changes don't invalidate the libpng cache
-COPY seeds /work/seeds
-COPY dictionaries /work/dictionaries
+# Instrumented libpng with ASan
+# Use export so autoconf cannot ignore the compiler setting
+RUN cd libpng-1.4.8 \
+    && export CC=afl-clang-fast \
+    && export AFL_LLVM_LAF_ALL=1 \
+    && export CFLAGS="-fsanitize=address -g" \
+    && export LDFLAGS="-fsanitize=address" \
+    && ./configure --prefix=/usr/local/asan --disable-shared \
+    && make -j$(nproc) && make install \
+    && strings /usr/local/asan/lib/libpng14.a | grep -q __afl_area_ptr \
+    && echo "[+] libpng instrumented with AFL++ OK" \
+    && strings /usr/local/asan/lib/libpng14.a | grep -q __asan_report \
+    && echo "[+] libpng instrumented with ASAN OK" \
+    && cd / && rm -rf libpng-1.4.8 libpng-1.4.8.tar.gz
 
 WORKDIR /work
 
