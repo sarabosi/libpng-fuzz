@@ -35,7 +35,7 @@ build:
 		-o bin/png_fuzz_persistent
 
 	# QEMU harness (using Vanilla/Uninstrumented lib)
-	gcc src/harness_persistent.c \
+	gcc src/harness.c \
 		-I$(VANILLA_PATH)/include \
 		$(VANILLA_PATH)/lib/libpng14.a -lz -lm \
 		$(COMMON_FLAGS) \
