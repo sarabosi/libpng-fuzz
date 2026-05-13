@@ -18,7 +18,7 @@ RUN wget https://download.sourceforge.net/libpng/libpng-1.4.8.tar.gz \
 #Vanilla (uninstrumented) libpng for QEMU mode
 RUN cp -r libpng-1.4.8 libpng-1.4.8-vanilla \
     && cd libpng-1.4.8-vanilla \
-    && ./configure --prefix=/usr/local/vanilla --disable-shared \
+    && ./configure --prefix=/usr/local/vanilla --disable-shared --build=aarch64-unknown-linux-gnu \
     && make -j$(nproc) && make install && ldconfig \
     && cd / && rm -rf libpng-1.4.8-vanilla
 
@@ -29,7 +29,7 @@ RUN cd libpng-1.4.8 \
     && export AFL_LLVM_LAF_ALL=1 \
     && export CFLAGS="-fsanitize=address -g" \
     && export LDFLAGS="-fsanitize=address" \
-    && ./configure --prefix=/usr/local/asan --disable-shared \
+    && ./configure --prefix=/usr/local/asan --disable-shared --build=aarch64-unknown-linux-gnu \
     && make -j$(nproc) && make install \
     && strings /usr/local/asan/lib/libpng14.a | grep -q __afl_area_ptr \
     && echo "[+] libpng instrumented with AFL++ OK" \

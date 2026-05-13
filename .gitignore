@@ -12,6 +12,7 @@ install_vanilla/
 # AFL++ campaign output (queue/, crashes/, hangs/, ...)
 findings/
 findings-qemu/
+findings-qemu-q7/
 
 # NOTE: after the 30-minute campaigns, plot_data must be committed manually
 # Do with:
