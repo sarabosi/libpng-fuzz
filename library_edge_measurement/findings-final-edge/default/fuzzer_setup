@@ -1,0 +1,11 @@
+# environment variables:
+AFL_CUSTOM_INFO_PROGRAM=bin/png_fuzz
+AFL_CUSTOM_INFO_PROGRAM_ARGV=@@
+AFL_CUSTOM_INFO_OUT=q8_measure/findings-final-edge/default
+AFL_DEBUG=1
+AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+AFL_TRY_AFFINITY=1
+AFL_NO_UI=1
+AFL_SKIP_CPUFREQ=1
+# command line:
+'afl-fuzz' '-i' 'seeds' '-o' 'q8_measure/findings-final-edge' '-x' 'dictionaries/png.dict' '--' 'bin/png_fuzz' '@@'
