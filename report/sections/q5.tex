@@ -1,0 +1,125 @@
+\section{Crash Triage}
+
+A representative crash was selected for triage and
+replayed with ASan to confirm and analyze
+the potential bug.
+
+
+\subsection{Step 1: Reproduce}
+
+The crash input was copied to a dedicated \texttt{triage/} directory and run
+through \texttt{bin/png\_fuzz} with ASan symbolization enabled:
+
+{\scriptsize
+\begin{lstlisting}[style=terminal]
+$ cp findings/default/crashes/id:000076,...\
+      triage/crash_example.png
+$ ASAN_OPTIONS=abort_on_error=0:\
+    detect_leaks=0:exitcode=0:symbolize=1 \
+  ./bin/png_fuzz triage/crash_example.png
+
+ERRORERROR: AddressSanitizer: heap-buffer-overflow
+  on address 0x506000000120
+READ of size 11 at 0x506000000120 thread T0
+  #0 strlen  (png_fuzz+0x4a3e6)
+  #1 png_push_read_iTXt  pngpread.c:1606
+  #2 png_process_data    pngpread.c:41
+  #3 run_progressive_read harness.c:57
+  #4 main                harness.c:247
+
+0x506000000120 is located 0 bytes after
+  64-byte region [0x...e0, 0x...120)
+allocated in png_malloc <- png_process_data
+
+SUMMARY: heap-buffer-overflow in strlen
+\end{lstlisting}
+}
+
+ASan reports an out-of-bounds heap read originating from a
+call to \texttt{strlen()} operating on attacker-controlled chunk data. The call chain localizes the fault to libpng's
+iTXt parsing logic inside
+\texttt{png\_push\_read\_iTXt()}, suggesting that malformed
+text metadata is processed without sufficient boundary
+validation.
+
+\subsection{Step 2: Minimize with \texttt{afl-tmin}}
+
+To isolate the minimal conditions required to reproduce the
+fault, the original 418-byte crashing input was minimized
+using \texttt{afl-tmin}:
+
+{\scriptsize
+\begin{lstlisting}[style=terminal]
+$ AFL_SKIP_CPUFREQ=1 afl-tmin \
+    -i triage/crash_example.png \
+    -o triage/crash_min.png \
+    -- ./bin/png_fuzz @@
+    
+[+] Read 418 bytes from 'crash_example.png'.
+[+] Program exits with a signal,
+    minimizing in crash mode.
+[+] Block removal complete, 124 bytes deleted.
+[+] Symbol minimization: 14 symbols replaced.
+[+] Block removal complete, 15 bytes deleted.
+[+] Block removal complete, 0 bytes deleted.
+
+ File size reduced by : 33.25% (to 279 bytes)
+ Characters simplified: 125.45%
+ Number of execs done : 748
+\end{lstlisting}
+}
+
+To validate reproducibility, the minimized input was executed
+under the ASan-instrumented binary:
+
+{\scriptsize
+\begin{lstlisting}[style=terminal]
+$ ASAN_OPTIONS=abort_on_error=0:\
+    detect_leaks=0:exitcode=0:symbolize=1 \
+  ./bin/png_fuzz triage/crash_min.png
+
+ERRORERROR: AddressSanitizer: heap-buffer-overflow
+READ of size 1 at 0x506000000052 thread T0
+  #0 png_push_read_iTXt  pngpread.c:1581
+  #1 png_process_data    pngpread.c:41
+  #2 run_progressive_read harness.c:57
+
+0x506000000052 is located 1 byte after
+  49-byte region [0x...020, 0x...051)
+
+SUMMARY: heap-buffer-overflow
+  pngpread.c:1581 in png_push_read_iTXt
+\end{lstlisting}
+}
+The minimized input continues to trigger a heap out-of-bounds
+read within the iTXt parsing logic, confirming the successful reduction of the input.
+
+\vspace{-0.2cm}
+\subsection{Step 3: Diagnose and Bug Classification}
+
+The iTXt parsing logic in \texttt{png\_push\_read\_iTXt()} processes
+multiple variable-length fields stored sequentially and separated by
+NUL (\texttt{0x00}) delimiters. These fields are traversed using
+pointer iteration without enforcing strict bounds based on the
+declared chunk length.
+
+{\scriptsize
+\begin{lstlisting}[style=terminal]
+/* pngpread.c:1572 */
+for (lang = key; *lang; lang++)
+    /* Empty loop */ ;
+
+/* pngpread.c:1581 */
+for (lang_key = lang; *lang_key; lang_key++)
+    /* Empty loop */ ;
+
+/* pngpread.c:1606 */
+text_ptr->itxt_length = png_strlen(text);
+\end{lstlisting}
+}
+
+If a malformed iTXt chunk omits a terminator within the allocated
+region, traversal continues beyond the heap buffer, resulting in a heap-based out-of-bounds read. The issue is similar in class to previously reported libpng
+text-chunk parsing vulnerabilities (e.g., CVE-2015-8540), but stems
+from unchecked NUL-terminated traversal rather than integer-related
+bounds checking. No exact CVE match was identified for libpng~1.4.8.

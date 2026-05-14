@@ -1,0 +1,65 @@
+\section{Attack Surface Analysis}
+
+
+\subsection{Real-World Applications}
+
+\textbf{Mozilla Firefox.} Firefox uses libpng to decode PNG images
+rendered in web content. PNG data is processed incrementally as it is
+downloaded over HTTP, and passed to libpng through its progressive
+decoding interface (\texttt{png\_process\_data()}). This resembles the
+progressive png decoding strategy used in our fuzzing harness. Because any
+website can supply arbitrary image data via \texttt{<img>} tags,
+background images, or favicons, the library is exposed to untrusted
+input in a fully remote, browser-driven context.
+
+\textbf{GIMP.} The GNU Image Manipulation Program relies on libpng
+to decode and encode PNG files when opening or exporting images.
+When a user loads an image from an untrusted source (e.g., email
+attachments or downloaded assets), GIMP parses PNG metadata,
+including iTXt chunks, using libpng’s standard read interfaces.
+This exposes the same parsing logic exercised in our test harness
+to user-controlled files in a desktop application context.
+
+\subsection{Concrete Attack Scenario}
+
+An attacker hosts or distributes a crafted PNG image containing a
+malformed iTXt chunk. The \textit{Length} field is set to match the
+declared keyword size, but the data omits a NUL terminator within the
+allocated buffer.
+
+When a victim application such as a web browser or image viewer
+processes the image, libpng parses the file and enters the iTXt
+decoding routine in \texttt{png\_push\_read\_iTXt()}. During this
+process, pointer-based traversal is used to locate NUL separators
+between metadata fields. Because no terminator exists within bounds, the parser continues
+reading beyond the allocated heap buffer. This results in a small
+out-of-bounds read during string processing (via \texttt{strlen()}
+or equivalent traversal logic), leading to memory access outside the
+intended allocation.
+
+In practice, this can result in a controlled crash (denial of
+service) or limited disclosure of adjacent heap memory, depending on
+the application environment and memory layout. The issue requires no user interaction
+beyond opening or rendering the image.
+
+\subsection{Code Paths Not Exercised by the Harness}
+
+\textbf{Gap 1: Encoder (write) path.}
+The fuzzing harness exercises only read-side PNG processing through
+\texttt{png\_process\_data()} and does not invoke any write-side APIs
+such as \texttt{png\_write\_info()} or \texttt{png\_write\_iTXt()}.
+As a result, the encoder code in \texttt{pngwutil.c} is not covered.
+
+This matters in applications such as GIMP, where PNG metadata may be
+read from a file and later written back when exporting an image.
+
+\textbf{Gap 2: Optional image transform paths.}
+The harness does not enable certain image transformation routines,
+such as RGB-to-grayscale conversion (\texttt{png\_do\_rgb\_to\_gray()}
+in \texttt{pngtrans.c}). These paths may be triggered in real-world
+applications under specific rendering conditions (e.g., grayscale
+display modes or image filters).
+
+This gap implies that certain execution paths are not explored, and
+therefore potential vulnerabilities in these components would not be
+triggered by the current fuzzing campaign.

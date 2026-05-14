@@ -1,0 +1,71 @@
+\newpage
+\section{Q7 Campaigns}
+\label{app:q7-evidence}
+\setcounter{figure}{0}
+
+Table~\ref{tab:qemu-comparison} compares the campaigns at the 30-minute mark. Appendix Figures~\ref{fig:instr-status} to~\ref{fig:qemu-execspeed} contain the supporting AFL++ status screens and \texttt{afl-plot} graphs.
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{lcc}
+\hline
+Metric & Instrumented & QEMU mode \\
+\hline
+Wall-clock time & 1800 sec & 1800 sec \\
+Exec speed & 313.8 exec/s & 295.7 exec/s \\
+Corpus count & 1073 & 1080 \\
+Edges found & 3158 & 3648 \\
+Overall map density & 30.73\% & 5.57\% \\
+Saved crashes & 71 & 0 \\
+Total crashes & 2152 & 0 \\
+Cycles done & 0 & 0 \\
+Stability & 100.00\% & 100.00\% \\
+\hline
+\end{tabular}
+\caption{Comparison between the source-instrumented campaign and the QEMU-mode campaign after 30 minutes.}
+\label{tab:qemu-comparison}
+\end{table}
+
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/q7_instrumented_status.png}
+\caption{AFL++ status screen for the source-instrumented campaign after 30 minutes.}
+\label{fig:instr-status}
+\end{figure}
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/q7_instrumented_edges.png}
+\caption{afl-plot edges graph for the source-instrumented campaign.}
+\label{fig:instr-edges}
+\end{figure}
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/q7_instrumented_exec_speed.png}
+\caption{afl-plot execution speed graph for the source-instrumented campaign.}
+\label{fig:instr-execspeed}
+\end{figure}
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/q7_qemu_status.png}
+\caption{AFL++ status screen for the QEMU-mode campaign after 30 minutes.}
+\label{fig:qemu-status}
+\end{figure}
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/q7_qemu_edges.png}
+\caption{afl-plot edges graph for the QEMU-mode campaign.}
+\label{fig:qemu-edges}
+\end{figure}
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/q7_qemu_exec_speed.png}
+\caption{afl-plot execution speed graph for the QEMU-mode campaign.}
+\label{fig:qemu-execspeed}
+\end{figure}

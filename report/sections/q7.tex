@@ -1,0 +1,19 @@
+\section{Binary-Only Fuzzing with QEMU Mode}
+
+We compared our source-instrumented, ASan-enabled campaign against a binary-only QEMU campaign (\texttt{-Q}) compiled without sanitizers or instrumentation. Both used identical versions, harnesses, seeds, dictionaries and CRC patches. Appendix~\ref{app:q7-evidence} provides supporting logs and plots.
+
+At 30 minutes, the instrumented vs.\ QEMU campaigns yielded execution speeds of 313.8 vs.\ 295.7 exec/s, corpus counts of 1,073 vs.\ 1,080, and 3,158 vs.\ 3,648 discovered edges.
+
+\textbf{Performance:} QEMU dynamically translates basic blocks at runtime to inject coverage tracking, which is typically slower than compile-time hooks. However, our 5.8\% slowdown was minimal because the baseline's heavy ASan memory checks offset the penalty of QEMU's dynamic translation.
+
+\textbf{Coverage \& Crashes:} The differing edge counts occur because QEMU reconstructs coverage dynamically from translated blocks, yielding different (and lower-resolution) feedback than precise compiler-inserted hooks. Crucially, the instrumented campaign saved 71 crashes while QEMU saved zero. Without ASan, QEMU only detects fatal OS-level signals (e.g., \texttt{SIGSEGV}), entirely missing the silent memory corruptions caught by ASan's redzones.
+
+%At the same wall-clock time, execution speeds were similar: 313.8 exec/s for the source-instrumented campaign versus 295.7 execs/s for QEMU (only 5.8\% slower in this run). Typically, QEMU mode suffers massive overhead because it dynamically translates basic blocks to inject coverage tracking at runtime. Compile-time instrumentation is usually cheaper because the coverage logic is inserted directly into the binary during compilation.
+
+%However, in this experiment the QEMU slowdown was small. The source-instrumented baseline was built with AddressSanitizer, while the QEMU binary was not. Since libpng performs many memory operations during image parsing and decompression, ASan adds a significant runtime cost. As a result, the dynamic translation overhead of QEMU and the sanitizer overhead of the instrumented build produced relatively close execution speeds.
+
+%The corpus count was also very similar: the instrumented campaign saved 1073 inputs, while the QEMU campaign saved 1080. While QEMU reported more raw edges (3648 vs. 3158), the instrumented run achieved a vastly higher map density (30.73\% vs. 5.57\%). These metrics are not perfectly one-to-one because the two modes encode coverage differently: compile-time instrumentation relies on a structural map of compiler-inserted hooks, whereas QEMU reconstructs coverage from dynamically translated basic blocks, resulting in lower-resolution feedback.
+
+%Crucially, the crash results are very different: the source-instrumented ASan campaign saved 71 crashes and observed 2152 total crashes, while the QEMU campaign saved no crashes. This is consistent with the binary-only configuration: without ASan, the QEMU run can only observe bugs that lead to a visible process crash, such as a segmentation fault or abort. Memory errors detected by ASan in the instrumented build may remain silent in the QEMU run unless they immediately corrupt execution in a crashable way.
+
+%Overall, the experiment shows that QEMU mode enables coverage-guided fuzzing without source-level instrumentation, but its coverage feedback and crash-detection behavior are not directly equivalent to the source-instrumented ASan setup.
