@@ -13,6 +13,9 @@ install_vanilla/
 findings/
 findings-qemu/
 findings-qemu-q7/
+findings-instrumented-q7/
+library_edge_measurement/
+q8_results/
 
 # NOTE: after the 30-minute campaigns, plot_data must be committed manually
 # Do with:
@@ -25,6 +28,10 @@ findings-qemu-q7/
 png_fuzz
 png_fuzz_qemu
 png_fuzz_persistent
+
+# Plots
+plot_output_instrumented_q7/
+plot_output_qemu_q7/
 
 # Editor/OS junk
 .vscode/
